@@ -1,0 +1,8 @@
+---
+# Red Hat Satellite 6.19 Automation Playbooks
+# Collection requirements
+collections:
+  - name: redhat.satellite_operations
+    version: ">=1.0.0"
+  - name: redhat.satellite
+    version: ">=1.0.0"

@@ -1,0 +1,16 @@
+---
+# Playbook 01: Install Red Hat Satellite 6.19
+# Uses redhat.satellite_operations collection (role-based)
+
+- name: Install Red Hat Satellite 6.19
+  hosts: satellite_server
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Deploy Satellite using installer role
+      redhat.satellite_operations.installer:
+        satellite_installer_scenario: satellite
+        satellite_installer_package: satellite-installer
+        satellite_installer_options:
+          - "--foreman-initial-organization '{{ satellite_organization }}'"
+          - "--foreman-initial-admin-password '{{ satellite_admin_password }}'"

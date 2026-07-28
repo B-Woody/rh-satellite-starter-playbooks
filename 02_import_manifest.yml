@@ -1,0 +1,33 @@
+---
+# Playbook 02: Import Red Hat Subscription Manifest
+# Uses redhat.satellite collection
+
+- name: Import Subscription Manifest
+  hosts: satellite_server
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+    manifest_path: "{{ lookup('env', 'MANIFEST_PATH') | default('/tmp/manifest.zip', strict=False) }}"
+  tasks:
+    - name: Upload subscription manifest
+      redhat.satellite.subscription_manifest:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        state: present
+        manifest_path: "{{ manifest_path }}"
+
+    - name: Verify manifest import
+      redhat.satellite.subscription_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+      register: subscription_info
+
+    - name: Display subscription details
+      ansible.builtin.debug:
+        msg: "Subscription details: {{ subscription_info }}"

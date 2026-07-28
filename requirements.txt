@@ -1,0 +1,3 @@
+---
+# Install Ansible collections required by these playbooks
+# Run: ansible-galaxy collection install -r requirements.yml

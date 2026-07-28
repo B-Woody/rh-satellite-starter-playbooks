@@ -1,0 +1,25 @@
+---
+# Playbook 05: Create Content View with RHEL 9 repositories
+# Uses redhat.satellite collection
+
+- name: Create Content View with RHEL 9 Repositories
+  hosts: satellite_server
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+  tasks:
+    - name: Create Content View with BaseOS and AppStream repositories
+      redhat.satellite.content_view:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        name: "RHEL 9 CV"
+        label: "rhel9"
+        repositories:
+          - name: "Red Hat Enterprise Linux 9 BaseOS (RPMs)"
+            product: "Red Hat Enterprise Linux 9 for x86_64"
+          - name: "Red Hat Enterprise Linux 9 AppStream (RPMs)"
+            product: "Red Hat Enterprise Linux 9 for x86_64"

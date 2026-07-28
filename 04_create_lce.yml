@@ -1,0 +1,44 @@
+---
+# Playbook 04: Create Lifecycle Environment path
+# Uses redhat.satellite collection
+
+- name: Create Lifecycle Environment Path
+  hosts: satellite_server
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+  tasks:
+    - name: Create Development lifecycle environment (child of Library)
+      redhat.satellite.lifecycle_environment:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        name: "Development"
+        label: "development"
+        prior: "Library"
+        state: present
+
+    - name: Create QA lifecycle environment (child of Development)
+      redhat.satellite.lifecycle_environment:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        name: "QA"
+        label: "qa"
+        prior: "Development"
+        state: present
+
+    - name: Create Production lifecycle environment (child of QA)
+      redhat.satellite.lifecycle_environment:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        name: "Production"
+        label: "production"
+        prior: "QA"
+        state: present

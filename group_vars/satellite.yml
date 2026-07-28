@@ -1,0 +1,5 @@
+---
+# Variables for Satellite installation
+satellite_hostname: satellite.example.com
+satellite_organization: "Default_Organization"
+satellite_admin_password: "changeme"

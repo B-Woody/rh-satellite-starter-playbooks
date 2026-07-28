@@ -1,0 +1,17 @@
+---
+# Inventory for Red Hat Satellite playbooks
+#
+# Configure the Satellite server details below.
+# Replace 'satellite.example.com' with the actual hostname or IP.
+all:
+  hosts:
+    satellite_server:
+      ansible_host: satellite.example.com
+      ansible_user: ansible
+      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_port: 22
+
+  children:
+    satellite_servers:
+      hosts:
+        - satellite_server

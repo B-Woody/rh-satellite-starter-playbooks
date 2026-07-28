@@ -1,0 +1,29 @@
+---
+# Playbook 06: Sync Repositories
+# Uses redhat.satellite collection
+
+- name: Sync RHEL 9 Repositories
+  hosts: satellite_server
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+  tasks:
+    - name: Sync BaseOS repository
+      redhat.satellite.repository_sync:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        product: "Red Hat Enterprise Linux 9 for x86_64"
+        repository: "Red Hat Enterprise Linux 9 BaseOS (RPMs)"
+
+    - name: Sync AppStream repository
+      redhat.satellite.repository_sync:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        organization: "{{ organization }}"
+        product: "Red Hat Enterprise Linux 9 for x86_64"
+        repository: "Red Hat Enterprise Linux 9 AppStream (RPMs)"
