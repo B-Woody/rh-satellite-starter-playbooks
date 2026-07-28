@@ -10,20 +10,16 @@
     satellite_admin_pass: "{{ satellite_admin_password }}"
     organization: "{{ satellite_organization }}"
   tasks:
-    - name: Sync BaseOS repository
+    - name: Sync RHEL 9 repositories
       redhat.satellite.repository_sync:
         username: "{{ satellite_admin_user }}"
         password: "{{ satellite_admin_pass }}"
         server_url: "{{ satellite_server_url }}"
         organization: "{{ organization }}"
-        product: "Red Hat Enterprise Linux 9 for x86_64"
-        repository: "Red Hat Enterprise Linux 9 BaseOS (RPMs)"
+        product: "Red Hat Enterprise Linux for x86_64"
+      async: 3600  # Maximum runtime allowed (1 hour)
+      poll: 0       # 0 means "fire and forget" / do not wait
+      register: repo_sync_job
 
-    - name: Sync AppStream repository
-      redhat.satellite.repository_sync:
-        username: "{{ satellite_admin_user }}"
-        password: "{{ satellite_admin_pass }}"
-        server_url: "{{ satellite_server_url }}"
-        organization: "{{ organization }}"
-        product: "Red Hat Enterprise Linux 9 for x86_64"
-        repository: "Red Hat Enterprise Linux 9 AppStream (RPMs)"
+
+

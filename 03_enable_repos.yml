@@ -16,9 +16,11 @@
         password: "{{ satellite_admin_pass }}"
         server_url: "{{ satellite_server_url }}"
         organization: "{{ organization }}"
+        name: "Red Hat Enterprise Linux 9 for x86_64 - BaseOS (RPMs)"
         label: "rhel-9-for-x86_64-baseos-rpms"
+        product: "Red Hat Enterprise Linux for x86_64"
         repositories:
-          - basearch: "x86_64"
+          - releasever: "9"
         state: enabled
 
     - name: Enable RHEL 9 AppStream repositories
@@ -27,7 +29,8 @@
         password: "{{ satellite_admin_pass }}"
         server_url: "{{ satellite_server_url }}"
         organization: "{{ organization }}"
+        name: "Red Hat Enterprise Linux 9 for x86_64 - AppStream (RPMs)"
         label: "rhel-9-for-x86_64-appstream-rpms"
         repositories:
-          - basearch: "x86_64"
+          - releasever: "9"
         state: enabled

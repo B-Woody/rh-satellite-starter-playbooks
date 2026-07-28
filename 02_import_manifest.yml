@@ -9,7 +9,7 @@
     satellite_admin_user: admin
     satellite_admin_pass: "{{ satellite_admin_password }}"
     organization: "{{ satellite_organization }}"
-    manifest_path: "{{ lookup('env', 'MANIFEST_PATH') | default('/tmp/manifest.zip', strict=False) }}"
+    manifest_path: "{{ lookup('env', 'MANIFEST_PATH', default='/tmp/manifest.zip') }}"
   tasks:
     - name: Upload subscription manifest
       redhat.satellite.subscription_manifest:

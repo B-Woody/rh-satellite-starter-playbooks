@@ -1,5 +1,5 @@
 ---
-# Red Hat Satellite 6.19 Automation Playbooks
+# Red Hat Satellite Automation Playbooks
 # Collection requirements
 collections:
   - name: redhat.satellite_operations

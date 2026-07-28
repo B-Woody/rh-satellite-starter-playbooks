@@ -1,10 +1,10 @@
 ---
 # Master playbook: Full Red Hat Satellite 6.19 setup
-# Run all steps in order
+# Run all steps in order, or comment out steps to skip so you don't have to re-run satrellite-installer everytime
 
-- import_playbooks: 01_install_satellite.yml
-- import_playbooks: 02_import_manifest.yml
-- import_playbooks: 03_enable_repos.yml
-- import_playbooks: 04_create_lce.yml
-- import_playbooks: 05_create_cv.yml
-- import_playbooks: 06_sync_repos.yml
+- import_playbook: 01_install_satellite.yml
+- import_playbook: 02_import_manifest.yml
+- import_playbook: 03_enable_repos.yml
+- import_playbook: 04_create_lce.yml
+- import_playbook: 05_create_cv.yml
+- import_playbook: 06_sync_repos.yml

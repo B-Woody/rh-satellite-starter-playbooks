@@ -1,14 +1,16 @@
 # Red Hat Satellite Automation Playbooks
 
-This directory contains a set of Ansible playbooks for automated installation and configuration of Red Hat Satellite.
+This is a set of Ansible playbooks for a simple automated installation and configuration of a very basic Red Hat Satellite. Nothing crazy, but it serves as a good starting point for setting up a new Satellite deployment with config-as-code approach. Deliberately kept simple so we can clone it and build on it.
 
 Playbooks use the `redhat.satellite` and `redhat.satellite_operations` Ansible collections from https://github.com/RedHatSatellite/ for as many tasks as possible.
 
-These playbooks are a starting point for automated installation and deployment of Red Hat Satellite. They are designed to be run in sequence, starting with `01_install_satellite.yml`.
+You can run these playbooks individually, or all at once with `run_all.yml`
+
+If need be, comment out lines in `run_all.yml` to skip steps or add more playbooks to expand. 
 
 ## Prerequisites
 
-1. Ansible is installed on the control node.
+1. Ansible is installed on the control node with `redhat.satellite` and `redhat.satellite_operations` collections.
 2. The target Satellite server is reachable via SSH.
 3. An RHN manifest file is available at `/tmp/manifest.zip` (or set `MANIFEST_PATH` env).
 4. SSH key-based authentication is configured for the target host.
@@ -21,13 +23,15 @@ Install the required Ansible collections:
 ansible-galaxy collection install -r requirements.yml
 ```
 
+If you're running this from Fedora or this doesn't work, you might need to get the collections from an actual RHEL host that has them installed via RPM. 
+
 ## Variable Configuration
 
 ### Group Variables
 
 Group variables (shared across all hosts):
 
-**`group_vars/satellite.yml`:**
+**`group_vars/satellite_servers.yml`:**
 
 - `satellite_hostname`: The hostname or FQDN of the Satellite server.
 - `satellite_organization`: The organization name in Satellite (default: `Default_Organization`).
@@ -125,7 +129,7 @@ Synchronizes the RHEL 9 repositories to Satellite using the `repository_sync` mo
 If you want to run all playbooks in sequence, use the `run_all.yml` master playbook:
 
 ```bash
-ansible-playbook -i inventory.yml run_all.yml
+ansible-playbook -i inventory.yml run_all.yml --become-ask-pass
 ```
 
 ## Notes
@@ -136,16 +140,18 @@ ansible-playbook -i inventory.yml run_all.yml
 - Playbooks 02–06 connect to Satellite's API via HTTP and do not need root privileges.
 - The manifest import (Playbook 02) requires a valid Red Hat subscription manifest.
 - Repository names in Playbooks 03–06 should match the actual repository names available in your Satellite organization after manifest import.
-- This is a starting point. Adapt the playbooks to your organization's needs.
+- **This is a starting point. Adapt the playbooks to your needs**
 
 ## Ansible Vault
+
+If you use this for a production deployment, please strongly consider using Ansible vault so your creds stay secure.
 
 ### Quick Reference
 
 The playbooks store secrets in plain text by default. Use Ansible Vault to encrypt sensitive files:
 
 ```bash
-ansible-vault encrypt group_vars/satellite.yml
+ansible-vault encrypt group_vars/satellite_servers.yml
 ansible-vault edit inventory.yml
 ```
 
@@ -162,45 +168,6 @@ export ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_key
 ansible-playbook -i inventory.yml
 ```
 
-### Full Guide
-
-#### 1. Encrypt Your Files
-
-```bash
-ansible-vault encrypt group_vars/satellite.yml inventory.yml
-```
-
-This rewrites them as `group_vars/satellite.yml.enc` and `inventory.yml.enc`.
-
-#### 2. Edit Encrypted Files
-
-```bash
-ansible-vault edit group_vars/satellite.yml
-```
-
-#### 3. Decrypt Files
-
-```bash
-ansible-vault decrypt group_vars/satellite.yml
-```
-
-#### 4. View Encrypted Files
-
-```bash
-ansible-vault view group_vars/satellite.yml
-```
-
-#### 5. Using a Password File
-
-Create a file containing your vault password (chmod 600):
-
-```bash
-echo "your-vault-password" > ~/.vault_key
-chmod 600 ~/.vault_key
-```
-
-Then use `--vault-password-file ~/.vault_key` on every command.
-
 ### Version Control
 
 Add encrypted vault files to `.gitignore` so they are not committed:
@@ -212,4 +179,8 @@ group_vars/*vault*
 host_vars/*vault*
 ```
 
-Then commit the plain-text files only after they are encrypted.
+---
+
+I hope this helps people get a head start!
+
+-Woody
