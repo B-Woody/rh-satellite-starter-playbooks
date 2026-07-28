@@ -179,6 +179,12 @@ group_vars/*vault*
 host_vars/*vault*
 ```
 
+## ToDo:
+
+- [ ] Acitvation Key Automation
+- [ ] Host Configuration ( firewall rules, storage verification etc. )
+- [ ] Disconnected Deployment
+
 ---
 
 I hope this helps people get a head start!
