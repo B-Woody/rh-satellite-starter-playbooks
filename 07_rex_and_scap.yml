@@ -1,0 +1,155 @@
+- name: Configure REX and SCAP
+  hosts: satellite_server
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+    location: "{{ satellite_default_location }}"
+    scap_policy_name: "RHEL Example Policy"
+  become: true
+
+  tasks:
+    - name: Run satellite-installer to configure REX custom directory and OpenSCAP features
+      import_role:
+        name: redhat.satellite_operations.installer
+      vars:
+        satellite_installer_scenario: satellite
+        satellite_installer_package: satellite-installer
+        satellite_installer_options:
+          - "--enable-foreman-proxy-plugin-openscap"
+          - "--foreman-proxy-plugin-openscap-ansible-module=true"
+          - "--foreman-proxy-plugin-remote-execution-script-mode=ssh"
+          - "--foreman-proxy-plugin-remote-execution-script-remote-working-dir=/var/rex"
+          - "--enable-foreman-proxy-plugin-ansible"
+      
+
+    - name: Fetch the system foreman-proxy public key for reference
+      ansible.builtin.slurp:
+        src: /usr/share/foreman-proxy/.ssh/id_rsa_foreman_proxy.pub
+      register: proxy_key
+
+    - name: Output information message regarding target nodes
+      ansible.builtin.debug:
+        msg: "Satellite is configured for REX. Please make sure the public key string below is added to cloud-user's authorized_keys on target hosts."
+
+    - name: Display Public SSH Key
+      ansible.builtin.debug:
+        msg: "{{ proxy_key['content'] | b64decode }}"
+
+    - name: Configure Global Satellite UI Settings for cloud-user REX execution
+      redhat.satellite.setting:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+      loop:
+        - { name: 'remote_execution_ssh_user', value: 'cloud-user' }
+        - { name: 'remote_execution_effective_user', value: 'root' }
+
+    - name: Scan for unimported Ansible roles
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/ansible/api/v2/ansible_roles/sync"
+        method: PUT
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          proxy_id: 1
+        status_code:
+          - 200
+      register: proxy_sync_results
+
+    - name: Force Satellite to import native Ansible roles from disk
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/ansible/api/v2/ansible_roles/import"
+        method: PUT
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          proxy_id: 1
+        status_code:
+          - 200
+          - 201
+
+    - name: Force Satellite to import Ansible variables from disk
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/ansible/api/v2/ansible_variables/import"
+        method: PUT
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          proxy_id: 1
+        status_code:
+          - 200
+          - 201
+
+    - name: Force Satellite to import Ansible variables from disk
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/ansible/api/v2/ansible_variables/import"
+        method: PUT
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          proxy_id: 1
+        status_code:
+          - 200
+          - 201
+
+    - name: Force Satellite to import Ansible variables from disk
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/ansible/api/v2/ansible_variables/import"
+        method: PUT
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          proxy_id: 1
+        status_code:
+          - 200
+          - 201
+
+    - name: Trigger SCAP content bulk upload endpoint directly via API POST
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/api/compliance/scap_contents/bulk_upload"
+        method: POST
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          type: "default"
+        status_code: 
+          - 200
+          - 201
+
+    - name: Create an OpenSCAP Compliance Policy via API
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/api/compliance/policies"
+        method: POST
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          policy:
+            name: "{{ scap_policy_name }}"
+            description: "Automated OpenSCAP scan via Ansible"
+            deploy_by: "ansible"      # Options: 'ansible', 'puppet', or 'manual'
+            period: "custom"                  # Options: 'weekly', 'monthly', 'custom'
+            cron_line: "0 2 1 * *"            # Runs at 2:00 AM on the 1st of every month
+            scap_content_id: 5                # Target ID of uploaded DataStream
+            # Exact XCCDF profile name string located inside the DataStream:
+            profile_id: "xccdf_org.ssgproject.content_profile_cis"
+        status_code:
+          - 200
+          - 201

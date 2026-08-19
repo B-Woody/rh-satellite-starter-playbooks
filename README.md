@@ -124,6 +124,14 @@ ansible-playbook -i inventory.yml 06_sync_repos.yml
 
 Synchronizes the RHEL 9 repositories to Satellite using the `repository_sync` module. Connects to the Satellite API via HTTP.
 
+### Step 07: Configure Remote Execution (REX) and Compliance Scanning (OpenSCAP)
+
+```bash
+ansible-playbook -i inventory.yml 07_rex_and_scap.yml
+```
+
+This configures REX and OpenSCAP features with some basic examples. Most uses direct API calls with `ansible.builtin.uri` and needs some tidy up to be more re-usable.
+
 ## Running All Playbooks
 
 If you want to run all playbooks in sequence, use the `run_all.yml` master playbook:
