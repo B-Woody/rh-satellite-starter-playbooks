@@ -80,14 +80,14 @@
       when:
         - content_transfer_metadata.incremental | default(false) | bool
         - destination_content_view.content_view is defined
-        - destination_content_view.content_view
+        - (destination_content_view.content_view | default(none)) is not none
       register: previous_imports
 
     - name: Require an import baseline for incremental content
       ansible.builtin.assert:
         that:
           - destination_content_view.content_view is defined
-          - destination_content_view.content_view
+          - (destination_content_view.content_view | default(none)) is not none
           - previous_imports.content_imports | default([]) | length > 0
         fail_msg: >-
           This is an incremental export, but Content View

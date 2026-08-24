@@ -24,7 +24,7 @@
       ansible.builtin.assert:
         that:
           - source_content_view.content_view is defined
-          - source_content_view.content_view
+          - (source_content_view.content_view | default(none)) is not none
         fail_msg: >-
           Content View '{{ content_transfer_content_view }}' does not exist in
           organization '{{ organization }}'. Create it before exporting content.
