@@ -1,0 +1,100 @@
+---
+# Run against the connected Satellite after its repositories have synchronized.
+
+- name: Export a Content View for a disconnected Satellite
+  hosts: satellite_server
+  gather_facts: false
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+  tasks:
+    - name: Look up the source Content View
+      redhat.satellite.content_view_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        name: "{{ content_transfer_content_view }}"
+      register: source_content_view
+
+    - name: Require the source Content View to exist
+      ansible.builtin.assert:
+        that:
+          - source_content_view.content_view is defined
+          - source_content_view.content_view
+        fail_msg: >-
+          Content View '{{ content_transfer_content_view }}' does not exist in
+          organization '{{ organization }}'. Create it before exporting content.
+
+    - name: Find previous exports for this destination
+      redhat.satellite.content_export_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        content_view: "{{ content_transfer_content_view }}"
+        destination_server: "{{ content_transfer_destination_server }}"
+      register: previous_exports
+
+    - name: Select prior syncable exports
+      ansible.builtin.set_fact:
+        syncable_export_history: >-
+          {{ previous_exports.content_exports | default([])
+             | selectattr('metadata.format', 'defined')
+             | selectattr('metadata.format', 'equalto', 'syncable')
+             | sort(attribute='id')
+             | list }}
+
+    - name: Publish a new Content View version
+      redhat.satellite.content_view_version:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        content_view: "{{ content_transfer_content_view }}"
+        description: "{{ content_transfer_version_description }}"
+      register: published_content_view_version
+
+    - name: Record the published version
+      ansible.builtin.set_fact:
+        content_transfer_published_version: >-
+          {{ published_content_view_version.entity.content_view_versions[0].version }}
+
+    - name: Export the new Content View version
+      redhat.satellite.content_export_version:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        content_view: "{{ content_transfer_content_view }}"
+        content_view_version: "{{ content_transfer_published_version }}"
+        destination_server: "{{ content_transfer_destination_server }}"
+        format: syncable
+        fail_on_missing_content: "{{ content_transfer_fail_on_missing_content }}"
+        incremental: >-
+          {{ content_transfer_from_history_id is defined
+             or (syncable_export_history | length > 0) }}
+        from_history_id: >-
+          {{ content_transfer_from_history_id
+             | default((syncable_export_history | last).id
+             if (syncable_export_history | length > 0) else omit) }}
+      register: content_transfer_export
+
+    - name: Show export result
+      ansible.builtin.debug:
+        msg:
+          content_view: "{{ content_transfer_content_view }}"
+          version: "{{ content_transfer_published_version }}"
+          export_type: >-
+            {{ 'incremental'
+               if (content_transfer_from_history_id is defined
+               or (syncable_export_history | length > 0)) else 'complete' }}
+          export_history_id: >-
+            {{ content_transfer_export.task.output.export_history_id | default('See the Satellite task output') }}
+          task_id: "{{ content_transfer_export.task.id | default('unknown') }}"

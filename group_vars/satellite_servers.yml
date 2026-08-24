@@ -2,4 +2,16 @@
 # Variables for Satellite installation
 satellite_hostname: satellite.example.com
 satellite_organization: "Default_Organization"
+satellite_default_location: "Default_Location"
 satellite_admin_password: "changeme"
+satellite_validate_certs: true
+
+# Connected-to-disconnected Content View transfer settings
+content_transfer_content_view: "RHEL 9 CV"
+content_transfer_destination_server: "disconnected-satellite.example.com"
+content_transfer_version_description: "Published for disconnected content transfer"
+content_transfer_fail_on_missing_content: true
+
+# The export directory must be copied to this location on the disconnected Satellite.
+content_transfer_import_path: "/var/lib/pulp/imports/content-view"
+content_transfer_metadata_file: "{{ content_transfer_import_path }}/metadata.json"

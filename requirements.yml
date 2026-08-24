@@ -5,4 +5,5 @@ collections:
   - name: redhat.satellite_operations
     version: ">=1.0.0"
   - name: redhat.satellite
-    version: ">=1.0.0"
+    # content_import_version and content_import_info were added in 4.1.0.
+    version: ">=4.1.0"

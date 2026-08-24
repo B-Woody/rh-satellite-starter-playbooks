@@ -132,6 +132,38 @@ ansible-playbook -i inventory.yml 07_rex_and_scap.yml
 
 This configures REX and OpenSCAP features with some basic examples. Most uses direct API calls with `ansible.builtin.uri` and needs some tidy up to be more re-usable.
 
+### Step 08: Export a Content View
+
+Run this against the connected Satellite after repository synchronization:
+
+```bash
+ansible-playbook -i inventory.yml 08_export_content_view.yml
+```
+
+The playbook publishes a new version of `content_transfer_content_view` and exports it in `syncable` format. The first export for a `content_transfer_destination_server` is complete. Later runs use the latest syncable export history for that destination and create an incremental export. This assumes every generated incremental is transferred and imported in order because the connected Satellite cannot inspect import history on the disconnected Satellite.
+
+To select a known imported baseline explicitly, pass its source export history ID:
+
+```bash
+ansible-playbook -i inventory.yml 08_export_content_view.yml \
+  -e content_transfer_from_history_id=123
+```
+
+Copy the complete export directory, including `metadata.json` and all repository content, to the disconnected Satellite. Preserve the directory layout and place it beneath `/var/lib/pulp/imports`.
+
+### Step 09: Import a Content View
+
+Run this against the disconnected Satellite after transferring the export:
+
+```bash
+ansible-playbook -i inventory.yml 09_import_content_view.yml \
+  -e content_transfer_import_path=/var/lib/pulp/imports/my-export
+```
+
+By default, the metadata file is `metadata.json` inside `content_transfer_import_path`; override `content_transfer_metadata_file` if your export layout differs. Satellite determines whether the import is complete or incremental from this metadata. For an incremental import, the playbook verifies that the exact predecessor version has an import history before starting the import. Import each incremental export in order and do not remove the baseline content.
+
+These playbooks use the `redhat.satellite` collection and do not invoke Hammer. They are not included in `run_all.yml` because export and import normally target different Satellite servers.
+
 ## Running All Playbooks
 
 If you want to run all playbooks in sequence, use the `run_all.yml` master playbook:

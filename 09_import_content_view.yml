@@ -1,0 +1,118 @@
+---
+# Run against the disconnected Satellite after copying the complete export
+# directory beneath /var/lib/pulp/imports.
+
+- name: Import a Content View on a disconnected Satellite
+  hosts: satellite_server
+  gather_facts: false
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+  tasks:
+    - name: Check the transferred export directory
+      ansible.builtin.stat:
+        path: "{{ content_transfer_import_path }}"
+      become: true
+      register: import_directory
+
+    - name: Check the transferred metadata file
+      ansible.builtin.stat:
+        path: "{{ content_transfer_metadata_file }}"
+      become: true
+      register: import_metadata_file
+
+    - name: Require the export directory and metadata
+      ansible.builtin.assert:
+        that:
+          - import_directory.stat.isdir | default(false)
+          - import_metadata_file.stat.isreg | default(false)
+        fail_msg: >-
+          Copy the complete export directory to '{{ content_transfer_import_path }}'
+          and set content_transfer_metadata_file to its metadata.json file.
+
+    - name: Read the export metadata
+      ansible.builtin.slurp:
+        src: "{{ content_transfer_metadata_file }}"
+      become: true
+      register: import_metadata_raw
+
+    - name: Decode the export metadata
+      ansible.builtin.set_fact:
+        content_transfer_metadata: "{{ import_metadata_raw.content | b64decode | from_json }}"
+
+    - name: Validate the transferred export
+      ansible.builtin.assert:
+        that:
+          - content_transfer_metadata.content_view.name is defined
+          - content_transfer_metadata.content_view_version is defined
+          - content_transfer_metadata.format | default('') == 'syncable'
+          - >-
+            not (content_transfer_metadata.incremental | default(false) | bool)
+            or (content_transfer_metadata.from_content_view_version.major is defined
+            and content_transfer_metadata.from_content_view_version.minor is defined)
+        fail_msg: >-
+          '{{ content_transfer_metadata_file }}' is not metadata for a syncable
+          Content View version export.
+
+    - name: Look up the destination Content View
+      redhat.satellite.content_view_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        name: "{{ content_transfer_metadata.content_view.name }}"
+      register: destination_content_view
+
+    - name: Find prior imports for an incremental payload
+      redhat.satellite.content_import_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        content_view: "{{ content_transfer_metadata.content_view.name }}"
+        content_view_version: >-
+          {{ content_transfer_metadata.from_content_view_version.major }}.{{
+             content_transfer_metadata.from_content_view_version.minor }}
+      when:
+        - content_transfer_metadata.incremental | default(false) | bool
+        - destination_content_view.content_view is defined
+        - destination_content_view.content_view
+      register: previous_imports
+
+    - name: Require an import baseline for incremental content
+      ansible.builtin.assert:
+        that:
+          - destination_content_view.content_view is defined
+          - destination_content_view.content_view
+          - previous_imports.content_imports | default([]) | length > 0
+        fail_msg: >-
+          This is an incremental export, but Content View
+          '{{ content_transfer_metadata.content_view.name }}' has no imported version
+          {{ content_transfer_metadata.from_content_view_version.major }}.{{
+             content_transfer_metadata.from_content_view_version.minor }} baseline.
+          Import the missing predecessor first.
+      when: content_transfer_metadata.incremental | default(false) | bool
+
+    - name: Import the Content View version
+      redhat.satellite.content_import_version:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        path: "{{ content_transfer_import_path }}"
+        metadata: "{{ content_transfer_metadata }}"
+      register: content_transfer_import
+
+    - name: Show import result
+      ansible.builtin.debug:
+        msg:
+          content_view: "{{ content_transfer_metadata.content_view.name }}"
+          import_type: >-
+            {{ 'incremental' if (content_transfer_metadata.incremental | default(false) | bool)
+               else 'complete' }}
+          task_id: "{{ content_transfer_import.task.id | default('unknown') }}"
