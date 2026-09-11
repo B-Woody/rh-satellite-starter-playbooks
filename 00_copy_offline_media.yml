@@ -1,0 +1,70 @@
+---
+# Optional pre-install step: copy installation DVDs from the Ansible controller.
+
+- name: Copy offline installation media to the Satellite server
+  hosts: satellite_server
+  gather_facts: false
+  become: true
+  vars:
+    offline_install_media:
+      - label: RHEL binary DVD
+        source: "{{ offline_install_rhel_iso_source }}"
+      - label: Satellite binary DVD
+        source: "{{ offline_install_satellite_iso_source }}"
+  tasks:
+    - name: Require controller-side ISO paths
+      ansible.builtin.assert:
+        that:
+          - item.source | length > 0
+        fail_msg: "Set the source path for the {{ item.label }}."
+      loop: "{{ offline_install_media }}"
+      loop_control:
+        label: "{{ item.label }}"
+
+    - name: Require distinct ISO filenames
+      ansible.builtin.assert:
+        that:
+          - (offline_install_rhel_iso_source | basename) != (offline_install_satellite_iso_source | basename)
+        fail_msg: >-
+          The RHEL and Satellite ISO files must have different filenames because
+          both are copied to {{ offline_install_iso_directory }}.
+
+    - name: Inspect ISO images on the Ansible controller
+      ansible.builtin.stat:
+        path: "{{ item.source }}"
+        get_checksum: false
+      delegate_to: localhost
+      become: false
+      register: offline_install_controller_isos
+      loop: "{{ offline_install_media }}"
+      loop_control:
+        label: "{{ item.source }}"
+
+    - name: Verify ISO images exist on the Ansible controller
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "{{ item.item.label }} was not found at {{ item.item.source }} on the Ansible controller."
+      loop: "{{ offline_install_controller_isos.results }}"
+      loop_control:
+        label: "{{ item.item.source }}"
+
+    - name: Create remote ISO directory
+      ansible.builtin.file:
+        path: "{{ offline_install_iso_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy ISO images to the Satellite server
+      ansible.builtin.copy:
+        src: "{{ item.source }}"
+        dest: "{{ offline_install_iso_directory }}/{{ item.source | basename }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ offline_install_media }}"
+      loop_control:
+        label: "{{ item.label }}"

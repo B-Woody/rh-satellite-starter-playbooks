@@ -14,6 +14,7 @@ If need be, comment out lines in `run_all.yml` to skip steps or add more playboo
 2. The target Satellite server is reachable via SSH.
 3. An RHN manifest file is available at `/tmp/manifest.zip` (or set `MANIFEST_PATH` env).
 4. SSH key-based authentication is configured for the target host.
+5. For an offline installation, matching RHEL 9 and Satellite 6.19 binary DVD ISO images are available on the Ansible control node.
 
 ## Collection Installation
 
@@ -36,6 +37,10 @@ Group variables (shared across all hosts):
 - `satellite_hostname`: The hostname or FQDN of the Satellite server.
 - `satellite_organization`: The organization name in Satellite (default: `Default_Organization`).
 - `satellite_admin_password`: The admin password for Satellite (default: `changeme`).
+- `offline_install_rhel_iso_source`: Controller-side path to the RHEL binary DVD ISO.
+- `offline_install_satellite_iso_source`: Controller-side path to the Satellite binary DVD ISO.
+- `offline_install_iso_directory`: Directory in which the ISOs are stored on the Satellite server.
+- `offline_install_repositories`: Local repository IDs and paths. Override these if a DVD has a different directory layout.
 
 ### Host Variables
 
@@ -75,6 +80,24 @@ ssh <ansible_user>@<satellite_host>
 2. Update `inventory.yml` with the correct host, user, and key path.
 
 ## Playbook Overview
+
+### Optional Step 00: Prepare Offline Installation Repositories
+
+Set the two controller-side ISO paths in `group_vars/satellite_servers.yml`, host variables, or on the command line. Then copy the images and configure persistent ISO mounts and local DNF repositories:
+
+```bash
+ansible-playbook -i inventory.yml 00_copy_offline_media.yml \
+  -e offline_install_rhel_iso_source=/path/to/rhel-9.iso \
+  -e offline_install_satellite_iso_source=/path/to/satellite-6.19.iso
+
+ansible-playbook -i inventory.yml 00_configure_offline_repositories.yml \
+  -e offline_install_rhel_iso_source=/path/to/rhel-9.iso \
+  -e offline_install_satellite_iso_source=/path/to/satellite-6.19.iso
+```
+
+The configuration playbook verifies repository metadata and confirms that `hostname` and `satellite-installer` are available using only the DVD repositories. It creates `/etc/yum.repos.d/satellite-offline.repo`. The default DVD paths are `BaseOS` and `AppStream` on the RHEL image and `Satellite` and `Maintenance` on the Satellite image.
+
+These playbooks configure repositories needed to install Satellite itself; they do not import operating-system content into Satellite. Use Playbooks 08 and 09 to transfer Content Views to a disconnected Satellite after installation. They are intentionally excluded from `run_all.yml`, so connected installation behavior does not change.
 
 ### Step 01: Install Satellite
 
@@ -177,6 +200,7 @@ ansible-playbook -i inventory.yml run_all.yml --become-ask-pass
 - All playbooks use the `inventory.yml` file as the default inventory.
 - All playbooks use SSH to connect to the target host.
 - Playbook 01 requires root privileges (`become: true`).
+- The optional Step 00 playbooks require root privileges on the Satellite server and enough free space for both ISO images.
 - Playbooks 02–06 connect to Satellite's API via HTTP and do not need root privileges.
 - The manifest import (Playbook 02) requires a valid Red Hat subscription manifest.
 - Repository names in Playbooks 03–06 should match the actual repository names available in your Satellite organization after manifest import.
@@ -223,7 +247,7 @@ host_vars/*vault*
 
 - [ ] Acitvation Key Automation
 - [ ] Host Configuration ( firewall rules, storage verification etc. )
-- [ ] Disconnected Deployment
+- [x] Offline repositories for disconnected Satellite installation
 
 ---
 

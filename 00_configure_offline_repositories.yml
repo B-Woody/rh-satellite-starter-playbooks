@@ -1,0 +1,114 @@
+---
+# Optional pre-install step: mount installation DVDs and configure local DNF repositories.
+
+- name: Configure offline installation repositories
+  hosts: satellite_server
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Create installation media mount points
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - "{{ offline_install_rhel_mount_point }}"
+        - "{{ offline_install_satellite_mount_point }}"
+
+    - name: Inspect copied ISO images
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: offline_install_remote_isos
+      loop:
+        - "{{ offline_install_rhel_iso_path }}"
+        - "{{ offline_install_satellite_iso_path }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Verify copied ISO images exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "ISO image {{ item.item }} is missing. Run 00_copy_offline_media.yml first."
+      loop: "{{ offline_install_remote_isos.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Persistently mount installation media
+      ansible.posix.mount:
+        path: "{{ item.path }}"
+        src: "{{ item.src }}"
+        fstype: iso9660
+        opts: loop,ro
+        state: mounted
+      loop:
+        - path: "{{ offline_install_rhel_mount_point }}"
+          src: "{{ offline_install_rhel_iso_path }}"
+        - path: "{{ offline_install_satellite_mount_point }}"
+          src: "{{ offline_install_satellite_iso_path }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Inspect repository metadata on installation media
+      ansible.builtin.stat:
+        path: "{{ item.baseurl | regex_replace('^file://', '') }}/repodata/repomd.xml"
+      register: offline_install_repository_metadata
+      loop: "{{ offline_install_repositories }}"
+      loop_control:
+        label: "{{ item.id }}"
+
+    - name: Verify repository paths match the DVD layouts
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: >-
+          Repository metadata for {{ item.item.id }} was not found below
+          {{ item.item.baseurl }}. Check offline_install_repositories against the DVD layout.
+      loop: "{{ offline_install_repository_metadata.results }}"
+      loop_control:
+        label: "{{ item.item.id }}"
+
+    - name: Configure offline DNF repositories
+      ansible.builtin.yum_repository:
+        file: satellite-offline
+        name: "{{ item.id }}"
+        description: "{{ item.name }}"
+        baseurl: "{{ item.baseurl }}"
+        enabled: true
+        gpgcheck: true
+        gpgkey: "{{ offline_install_gpg_key }}"
+        repo_gpgcheck: false
+        state: present
+      loop: "{{ offline_install_repositories }}"
+      loop_control:
+        label: "{{ item.id }}"
+
+    - name: Build metadata cache using only offline repositories
+      ansible.builtin.command:
+        argv:
+          - dnf
+          - --quiet
+          - makecache
+          - "--disablerepo=*"
+          - "--enablerepo={{ offline_install_repositories | map(attribute='id') | join(',') }}"
+      changed_when: false
+
+    - name: Verify installation packages are available offline
+      ansible.builtin.command:
+        argv:
+          - dnf
+          - --quiet
+          - repoquery
+          - "--disablerepo=*"
+          - "--enablerepo={{ offline_install_repositories | map(attribute='id') | join(',') }}"
+          - --queryformat
+          - "%{name}"
+          - "{{ item }}"
+      register: offline_install_package_query
+      changed_when: false
+      failed_when: offline_install_package_query.rc != 0 or item not in offline_install_package_query.stdout_lines
+      loop: "{{ offline_install_required_packages }}"
