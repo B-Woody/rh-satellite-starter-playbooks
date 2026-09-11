@@ -1,0 +1,10 @@
+---
+# Deploy Capsule servers after the main Satellite deployment is operational.
+
+- import_playbook: 10_prepare_capsule_content.yml
+- import_playbook: 11_register_capsule_host.yml
+- import_playbook: 12_generate_capsule_certificates.yml
+- import_playbook: 13_install_capsule.yml
+- import_playbook: 14_configure_capsule.yml
+- import_playbook: 15_sync_capsule_content.yml
+- import_playbook: 16_verify_capsule.yml

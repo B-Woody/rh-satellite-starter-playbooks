@@ -1,0 +1,93 @@
+---
+# Register each ready RHEL host to Satellite so it can install satellite-capsule.
+
+- name: Register Capsule hosts to Satellite
+  hosts: capsule_servers
+  gather_facts: false
+  become: true
+  serial: 1
+  vars:
+    satellite_inventory_host: "{{ groups['satellite_servers'] | first }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: >-
+      {{ hostvars[satellite_inventory_host].satellite_admin_password }}
+  tasks:
+    - name: Check current subscription registration
+      ansible.builtin.command: subscription-manager identity
+      register: capsule_subscription_identity_before
+      changed_when: false
+      failed_when: false
+
+    - name: Read current subscription server configuration
+      ansible.builtin.command: subscription-manager config --list --section server
+      register: capsule_subscription_config
+      changed_when: false
+      when: capsule_subscription_identity_before.rc == 0
+
+    - name: Record whether the host uses the intended Satellite
+      ansible.builtin.set_fact:
+        capsule_registered_to_satellite: >-
+          {{
+            capsule_subscription_identity_before.rc == 0 and
+            (
+              capsule_subscription_config.stdout | default('') |
+              regex_search(
+                '(?m)^\\s*hostname\\s*=\\s*\\[?' ~
+                (capsule_satellite_fqdn | regex_escape) ~ '\\]?\\s*$'
+              )
+            ) is not none
+          }}
+
+    - name: Reject registration to another subscription server
+      ansible.builtin.assert:
+        that:
+          - capsule_registered_to_satellite
+        fail_msg: >-
+          {{ inventory_hostname }} is already registered, but not to
+          {{ capsule_satellite_fqdn }}. Set capsule_registration_force=true to replace it.
+      when:
+        - capsule_subscription_identity_before.rc == 0
+        - not capsule_registered_to_satellite
+        - not capsule_registration_force | bool
+
+    - name: Generate a Capsule host registration command
+      redhat.satellite.registration_command:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ capsule_satellite_url }}"
+        validate_certs: "{{ capsule_validate_certs }}"
+        organization: "{{ capsule_organization }}"
+        location: "{{ capsule_location }}"
+        activation_keys:
+          - "{{ capsule_activation_key }}"
+        force: "{{ capsule_registration_force }}"
+        jwt_expiration: "{{ capsule_registration_jwt_expiration }}"
+        setup_insights: false
+        setup_remote_execution: false
+      register: capsule_registration
+      delegate_to: "{{ satellite_inventory_host }}"
+      become: false
+      no_log: true
+      when: not capsule_registered_to_satellite
+
+    - name: Run the generated registration command
+      ansible.builtin.shell:
+        cmd: "{{ capsule_registration.registration_command }}"
+      no_log: true
+      when: not capsule_registered_to_satellite
+
+    - name: Verify Capsule host registration
+      ansible.builtin.command: subscription-manager identity
+      changed_when: false
+
+    - name: Verify the Capsule package is available
+      ansible.builtin.command:
+        argv:
+          - dnf
+          - --quiet
+          - repoquery
+          - --available
+          - "{{ capsule_installer_package }}"
+      register: capsule_package_query
+      changed_when: false
+      failed_when: capsule_package_query.rc != 0 or capsule_package_query.stdout | length == 0

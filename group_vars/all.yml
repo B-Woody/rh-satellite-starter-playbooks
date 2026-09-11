@@ -1,0 +1,62 @@
+---
+# Shared settings for the Satellite 6.19 Capsule deployment workflow.
+capsule_content_view: "Capsule Server 6.19"
+capsule_content_view_label: capsule_server_6_19
+capsule_content_force_publish: false
+capsule_activation_key: capsule-server-6.19
+capsule_activation_key_lifecycle_environment: Library
+capsule_lifecycle_environments:
+  - Library
+capsule_download_policy: on_demand
+
+# Repository set labels and generated repository names can differ between
+# manifests. Override these values if Satellite reports different names.
+capsule_repository_sets:
+  - label: rhel-9-for-x86_64-baseos-rpms
+    repositories:
+      - releasever: "9"
+  - label: rhel-9-for-x86_64-appstream-rpms
+    repositories:
+      - releasever: "9"
+  - label: satellite-capsule-6.19-for-rhel-9-x86_64-rpms
+    all_repositories: true
+
+capsule_content_repositories:
+  - name: "Red Hat Enterprise Linux 9 for x86_64 - BaseOS RPMs 9"
+    product: "Red Hat Enterprise Linux for x86_64"
+  - name: "Red Hat Enterprise Linux 9 for x86_64 - AppStream RPMs 9"
+    product: "Red Hat Enterprise Linux for x86_64"
+  - name: "Red Hat Satellite Capsule 6.19 for RHEL 9 x86_64 RPMs"
+    product: "Red Hat Satellite Capsule"
+
+capsule_content_overrides:
+  - label: rhel-9-for-x86_64-baseos-rpms
+    override: enabled
+  - label: rhel-9-for-x86_64-appstream-rpms
+    override: enabled
+  - label: satellite-capsule-6.19-for-rhel-9-x86_64-rpms
+    override: enabled
+
+capsule_certificates_artifact_directory: "{{ playbook_dir }}/.artifacts/capsule-certificates"
+capsule_certificates_satellite_directory: /root/capsule-certificates
+capsule_certificates_regenerate: false
+capsule_remove_certificate_archive: true
+
+capsule_installer_package: satellite-capsule
+capsule_installer_scenario: capsule
+capsule_installer_timeout: 3600
+capsule_installer_extra_options: []
+capsule_enable_remote_execution: true
+capsule_remote_execution_working_directory: /var/rex
+capsule_manage_firewall: true
+capsule_firewall_service: RH-Satellite-6-capsule
+
+capsule_registration_force: false
+capsule_registration_jwt_expiration: 4
+capsule_content_sync: true
+capsule_content_sync_timeout: 43200
+capsule_validate_certs: false
+
+capsule_expected_features: >-
+  {{ ['Pulpcore'] +
+     (['Remote Execution'] if capsule_enable_remote_execution | bool else []) }}

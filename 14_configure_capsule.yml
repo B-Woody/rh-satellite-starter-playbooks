@@ -1,0 +1,66 @@
+---
+# Register Capsules in Satellite and assign their content configuration.
+
+- name: Configure Capsules in Satellite
+  hosts: satellite_server
+  gather_facts: false
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+  tasks:
+    - name: Wait for Capsules to become reachable from Satellite
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[item].capsule_fqdn }}"
+        port: 9090
+        timeout: 300
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+
+    - name: Register Capsules in Satellite
+      redhat.satellite.smart_proxy:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        name: "{{ hostvars[item].capsule_fqdn }}"
+        url: "https://{{ hostvars[item].capsule_fqdn }}:9090"
+        organizations:
+          - "{{ hostvars[item].capsule_organization }}"
+        locations:
+          - "{{ hostvars[item].capsule_location }}"
+        state: present
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+
+    - name: Refresh Capsule features
+      redhat.satellite.smart_proxy_refresh:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        smart_proxy: "{{ hostvars[item].capsule_fqdn }}"
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+
+    - name: Assign Capsule content settings
+      redhat.satellite.smart_proxy:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        name: "{{ hostvars[item].capsule_fqdn }}"
+        url: "https://{{ hostvars[item].capsule_fqdn }}:9090"
+        organizations:
+          - "{{ hostvars[item].capsule_organization }}"
+        locations:
+          - "{{ hostvars[item].capsule_location }}"
+        lifecycle_environments: "{{ hostvars[item].capsule_lifecycle_environments }}"
+        download_policy: "{{ hostvars[item].capsule_download_policy }}"
+        state: present
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"

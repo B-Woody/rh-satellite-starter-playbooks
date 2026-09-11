@@ -6,6 +6,33 @@ satellite_default_location: "CHANGE_ME_LOCATION"
 satellite_admin_password: "CHANGE_ME_PASSWORD"
 satellite_validate_certs: false
 
+# Optional disconnected installation media settings. Source paths are local to
+# the node running ansible-playbook and must be set before using the 00_* playbooks.
+offline_install_rhel_iso_source: ""
+offline_install_satellite_iso_source: ""
+offline_install_iso_directory: /var/tmp/satellite-install-isos
+offline_install_rhel_iso_path: "{{ offline_install_iso_directory }}/{{ offline_install_rhel_iso_source | basename }}"
+offline_install_satellite_iso_path: "{{ offline_install_iso_directory }}/{{ offline_install_satellite_iso_source | basename }}"
+offline_install_rhel_mount_point: /mnt/rhel-install-dvd
+offline_install_satellite_mount_point: /mnt/satellite-install-dvd
+offline_install_gpg_key: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+offline_install_required_packages:
+  - hostname
+  - satellite-installer
+offline_install_repositories:
+  - id: rhel-9-baseos-offline
+    name: RHEL 9 BaseOS - Offline DVD
+    baseurl: "file://{{ offline_install_rhel_mount_point }}/BaseOS"
+  - id: rhel-9-appstream-offline
+    name: RHEL 9 AppStream - Offline DVD
+    baseurl: "file://{{ offline_install_rhel_mount_point }}/AppStream"
+  - id: satellite-6.19-offline
+    name: Red Hat Satellite 6.19 - Offline DVD
+    baseurl: "file://{{ offline_install_satellite_mount_point }}/Satellite"
+  - id: satellite-maintenance-6.19-offline
+    name: Red Hat Satellite Maintenance 6.19 - Offline DVD
+    baseurl: "file://{{ offline_install_satellite_mount_point }}/Maintenance"
+
 # Connected-to-disconnected Content View transfer settings
 content_transfer_content_view: "RHEL 9 CV"
 content_transfer_destination_server: "disconnected-satellite.example.com"

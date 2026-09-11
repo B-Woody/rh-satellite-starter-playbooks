@@ -1,0 +1,52 @@
+---
+# Generate one certificate bundle per Capsule and stage it on the controller.
+
+- name: Generate Capsule certificate bundles
+  hosts: satellite_server
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Create Satellite certificate staging directory
+      ansible.builtin.file:
+        path: "{{ capsule_certificates_satellite_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Create controller certificate artifact directory
+      ansible.builtin.file:
+        path: "{{ capsule_certificates_artifact_directory }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Remove certificate bundles selected for regeneration
+      ansible.builtin.file:
+        path: "{{ capsule_certificates_satellite_directory }}/{{ hostvars[item].capsule_certificate_archive_name }}"
+        state: absent
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+      when: capsule_certificates_regenerate | bool
+
+    - name: Generate a certificate bundle for each Capsule
+      ansible.builtin.include_role:
+        name: redhat.satellite_operations.capsule_certs_generate
+      vars:
+        satellite_capsule_certs_generate_fqdn: "{{ hostvars[item].capsule_fqdn }}"
+        satellite_capsule_certs_generate_tarball: "{{ capsule_certificates_satellite_directory }}/{{ hostvars[item].capsule_certificate_archive_name }}"
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+
+    - name: Fetch Capsule certificate bundles to the controller
+      ansible.builtin.fetch:
+        src: "{{ capsule_certificates_satellite_directory }}/{{ hostvars[item].capsule_certificate_archive_name }}"
+        dest: "{{ capsule_certificates_artifact_directory }}/{{ hostvars[item].capsule_certificate_archive_name }}"
+        flat: true
+        validate_checksum: true
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"

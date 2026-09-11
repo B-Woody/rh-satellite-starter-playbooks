@@ -1,0 +1,89 @@
+---
+# Install Capsule without self-registering; playbook 14 registers it by API.
+
+- name: Install Satellite Capsule Server 6.19
+  hosts: capsule_servers
+  gather_facts: true
+  become: true
+  serial: 1
+  vars:
+    capsule_install_options: >-
+      {{
+        [
+          "--certs-tar-file '" ~ capsule_certificate_archive_path ~ "'",
+          "--foreman-proxy-register-in-foreman false",
+          "--foreman-proxy-foreman-base-url '" ~ capsule_satellite_url ~ "'",
+          "--foreman-proxy-trusted-hosts '" ~ capsule_satellite_fqdn ~ "'",
+          "--foreman-proxy-trusted-hosts '" ~ capsule_fqdn ~ "'"
+        ]
+        + (
+          [
+            "--enable-foreman-proxy-plugin-remote-execution-script",
+            "--foreman-proxy-plugin-remote-execution-script-mode ssh",
+            "--foreman-proxy-plugin-remote-execution-script-remote-working-dir '" ~
+              capsule_remote_execution_working_directory ~ "'"
+          ] if capsule_enable_remote_execution | bool else []
+        )
+        + capsule_installer_extra_options
+      }}
+  tasks:
+    - name: Check the controller certificate artifact
+      ansible.builtin.stat:
+        path: "{{ capsule_certificates_artifact_directory }}/{{ capsule_certificate_archive_name }}"
+      register: capsule_certificate_artifact
+      delegate_to: localhost
+      become: false
+
+    - name: Require a Capsule certificate artifact
+      ansible.builtin.assert:
+        that:
+          - capsule_certificate_artifact.stat.exists
+          - capsule_certificate_artifact.stat.isreg
+        fail_msg: >-
+          Run 12_generate_capsule_certificates.yml before installing
+          {{ inventory_hostname }}.
+
+    - name: Copy the Capsule certificate bundle
+      ansible.builtin.copy:
+        src: "{{ capsule_certificates_artifact_directory }}/{{ capsule_certificate_archive_name }}"
+        dest: "{{ capsule_certificate_archive_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Install Capsule using the Satellite installer role
+      ansible.builtin.import_role:
+        name: redhat.satellite_operations.installer
+      vars:
+        satellite_installer_scenario: "{{ capsule_installer_scenario }}"
+        satellite_installer_package: "{{ capsule_installer_package }}"
+        satellite_installer_options: "{{ capsule_install_options }}"
+        satellite_installer_timeout: "{{ capsule_installer_timeout }}"
+
+    - name: Allow Satellite Capsule traffic through firewalld
+      ansible.posix.firewalld:
+        service: "{{ capsule_firewall_service }}"
+        permanent: true
+        immediate: true
+        state: enabled
+      when: capsule_manage_firewall | bool
+
+    - name: Wait for the local Capsule API port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 9090
+        timeout: 300
+
+    - name: Remove the installed Capsule certificate archive
+      ansible.builtin.file:
+        path: "{{ capsule_certificate_archive_path }}"
+        state: absent
+      when: capsule_remove_certificate_archive | bool
+
+    - name: Remove the controller Capsule certificate artifact
+      ansible.builtin.file:
+        path: "{{ capsule_certificates_artifact_directory }}/{{ capsule_certificate_archive_name }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      when: capsule_remove_certificate_archive | bool

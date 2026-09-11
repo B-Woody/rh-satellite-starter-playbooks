@@ -1,0 +1,82 @@
+---
+# The collection configures Capsule content, but has no module to start its sync.
+
+- name: Synchronize content to Capsules
+  hosts: satellite_server
+  gather_facts: false
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+  tasks:
+    - name: Look up configured Capsules
+      redhat.satellite.resource_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        resource: smart_proxies
+        search: 'name="{{ hostvars[item].capsule_fqdn }}"'
+        full_details: true
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+      register: capsule_proxy_lookups
+      when: capsule_content_sync | bool
+
+    - name: Require every Capsule to be registered
+      ansible.builtin.assert:
+        that:
+          - item.resources | length == 1
+        fail_msg: >-
+          Capsule {{ hostvars[item.item].capsule_fqdn }} is not uniquely registered.
+          Run 14_configure_capsule.yml first.
+      loop: "{{ capsule_proxy_lookups.results | default([]) }}"
+      loop_control:
+        label: "{{ hostvars[item.item].capsule_fqdn }}"
+      when: capsule_content_sync | bool
+
+    - name: Start Capsule content synchronization through the Katello API
+      ansible.builtin.uri:
+        url: "{{ satellite_server_url }}/katello/api/capsules/{{ item.resources[0].id }}/content/sync"
+        method: POST
+        user: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        force_basic_auth: true
+        validate_certs: "{{ satellite_validate_certs }}"
+        body_format: json
+        body: {}
+        status_code:
+          - 200
+          - 202
+        return_content: true
+      loop: "{{ capsule_proxy_lookups.results | default([]) }}"
+      loop_control:
+        label: "{{ hostvars[item.item].capsule_fqdn }}"
+      register: capsule_sync_requests
+      no_log: true
+      when: capsule_content_sync | bool
+
+    - name: Require a Foreman task from each sync request
+      ansible.builtin.assert:
+        that:
+          - item.json is defined
+          - item.json.id is defined
+        fail_msg: The Capsule content sync API did not return a Foreman task ID.
+      loop: "{{ capsule_sync_requests.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.resources[0].name | default('Capsule') }}"
+      when: capsule_content_sync | bool
+
+    - name: Wait for Capsule content synchronization
+      redhat.satellite.wait_for_task:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        task: "{{ item.json.id }}"
+        timeout: "{{ capsule_content_sync_timeout }}"
+      loop: "{{ capsule_sync_requests.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.resources[0].name | default('Capsule') }}"
+      when: capsule_content_sync | bool

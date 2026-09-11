@@ -1,0 +1,66 @@
+---
+# Verify local services and Satellite's view of every configured Capsule.
+
+- name: Verify Capsule services
+  hosts: capsule_servers
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify foreman-proxy is active
+      ansible.builtin.command: systemctl is-active foreman-proxy
+      changed_when: false
+
+    - name: Verify the local Capsule API port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 9090
+        timeout: 30
+
+- name: Verify Capsules in Satellite
+  hosts: satellite_server
+  gather_facts: false
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+  tasks:
+    - name: Read Capsule details from Satellite
+      redhat.satellite.resource_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        resource: smart_proxies
+        search: 'name="{{ hostvars[item].capsule_fqdn }}"'
+        full_details: true
+      loop: "{{ groups['capsule_servers'] }}"
+      loop_control:
+        label: "{{ hostvars[item].capsule_fqdn }}"
+      register: verified_capsules
+
+    - name: Verify Capsule registration and features
+      ansible.builtin.assert:
+        that:
+          - item.resources | length == 1
+          - >-
+            capsule_expected_features |
+            difference(item.resources[0].features | default([]) |
+            map(attribute='name') | list) | length == 0
+        fail_msg: >-
+          Capsule {{ hostvars[item.item].capsule_fqdn }} is missing or does not
+          advertise all expected features: {{ capsule_expected_features | join(', ') }}.
+      loop: "{{ verified_capsules.results }}"
+      loop_control:
+        label: "{{ hostvars[item.item].capsule_fqdn }}"
+
+    - name: Show verified Capsules
+      ansible.builtin.debug:
+        msg:
+          capsule: "{{ hostvars[item.item].capsule_fqdn }}"
+          url: "{{ item.resources[0].url }}"
+          features: >-
+            {{ item.resources[0].features | default([]) |
+               map(attribute='name') | sort | list }}
+      loop: "{{ verified_capsules.results }}"
+      loop_control:
+        label: "{{ hostvars[item.item].capsule_fqdn }}"

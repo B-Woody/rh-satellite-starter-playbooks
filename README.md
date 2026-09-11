@@ -15,6 +15,7 @@ If need be, comment out lines in `run_all.yml` to skip steps or add more playboo
 3. An RHN manifest file is available at `/tmp/manifest.zip` (or set `MANIFEST_PATH` env).
 4. SSH key-based authentication is configured for the target host.
 5. For an offline installation, matching RHEL 9 and Satellite 6.19 binary DVD ISO images are available on the Ansible control node.
+6. For Capsule deployment, a RHEL 9 host with working forward and reverse DNS is reachable from both Ansible and Satellite.
 
 ## Collection Installation
 
@@ -42,6 +43,20 @@ Group variables (shared across all hosts):
 - `offline_install_iso_directory`: Directory in which the ISOs are stored on the Satellite server.
 - `offline_install_repositories`: Local repository IDs and paths. Override these if a DVD has a different directory layout.
 
+**`group_vars/all.yml`:**
+
+- `capsule_repository_sets`: Repository sets needed to install Capsule 6.19.
+- `capsule_content_repositories`: Generated Satellite repository names and parent products.
+- `capsule_content_view`: Content View used by Capsule hosts before installation.
+- `capsule_activation_key`: Activation key used to register the ready RHEL hosts.
+- `capsule_lifecycle_environments`: Content synchronized to each installed Capsule.
+- `capsule_download_policy`: Capsule content download policy.
+- `capsule_content_force_publish`: Publish a fresh installation Content View version after synchronization.
+- `capsule_certificates_regenerate`: Explicitly replace existing Capsule certificate bundles.
+- `capsule_installer_extra_options`: Additional `satellite-installer` arguments.
+- `capsule_expected_features`: Features required by post-install verification.
+- `capsule_manage_firewall`: Manage the packaged `RH-Satellite-6-capsule` firewalld service.
+
 ### Host Variables
 
 Variables specific to each host:
@@ -58,6 +73,7 @@ Variables specific to each host:
 - Update `ansible_host` with the IP or FQDN of the target Satellite server.
 - Update `ansible_user` with the SSH username.
 - Update `ansible_ssh_private_key_file` with the path to your private key.
+- Add each Capsule to the `capsule_servers` group. Use its DNS FQDN for `ansible_host`, or set `capsule_fqdn` in host variables.
 
 ### Playbook-Specific Variables
 
@@ -187,6 +203,56 @@ By default, the metadata file is `metadata.json` inside `content_transfer_import
 
 These playbooks use the `redhat.satellite` collection and do not invoke Hammer. They are not included in `run_all.yml` because export and import normally target different Satellite servers.
 
+## Capsule Deployment
+
+The Capsule workflow is separate from `run_all.yml` and assumes the main Satellite installation, manifest import, organization, and location are operational. It deploys a Satellite 6.19 content Capsule with Remote Execution enabled by default.
+
+Before running it, review `capsule_repository_sets` and `capsule_content_repositories` in `group_vars/all.yml`. Repository names generated from a Red Hat manifest can differ. The configured names must exactly match those shown by Satellite.
+
+Configure at least one Capsule host in `inventory.yml`:
+
+```yaml
+capsule_servers:
+  hosts:
+    capsule01:
+      ansible_host: capsule01.example.com
+      ansible_user: cloud-user
+```
+
+Override site-specific assignments in `host_vars/capsule01.yml` when needed:
+
+```yaml
+---
+capsule_fqdn: capsule01.example.com
+capsule_location: Remote Site
+capsule_lifecycle_environments:
+  - Library
+  - Production
+capsule_download_policy: on_demand
+```
+
+Run the complete workflow:
+
+```bash
+ansible-playbook -i inventory.yml run_capsule.yml
+```
+
+The individual playbooks are:
+
+1. `10_prepare_capsule_content.yml` enables and synchronizes the RHEL and Capsule repositories, creates and publishes a Content View, and creates an activation key.
+2. `11_register_capsule_host.yml` uses `redhat.satellite.registration_command` to register the ready RHEL host and verifies that `satellite-capsule` is available.
+3. `12_generate_capsule_certificates.yml` uses `redhat.satellite_operations.capsule_certs_generate` and securely stages one certificate bundle per Capsule under `.artifacts/`.
+4. `13_install_capsule.yml` uses `redhat.satellite_operations.installer` with the `capsule` scenario and enables Remote Execution.
+5. `14_configure_capsule.yml` uses `redhat.satellite.smart_proxy` and `smart_proxy_refresh` to register the Capsule and assign its organization, location, lifecycle environments, and download policy.
+6. `15_sync_capsule_content.yml` starts Capsule content synchronization through the Katello API and waits with `redhat.satellite.wait_for_task`.
+7. `16_verify_capsule.yml` verifies the local proxy service and the features advertised to Satellite.
+
+Repository synchronization and Capsule content synchronization are operational actions and run whenever their playbooks run. Content View publication is idempotent by default: the first version is published automatically. Set `capsule_content_force_publish=true` when synchronized repository changes must be published for later Capsule installations.
+
+Certificate artifacts are ignored by Git, stored with restrictive permissions, and removed from the controller and Capsule after a successful installation by default. The protected source bundle remains on Satellite so later complete runs can stage it again. Set `capsule_certificates_regenerate=true` only when certificates must be replaced.
+
+The default configuration disables Satellite TLS certificate validation to match the existing repository defaults. For production, install the Satellite CA on the Ansible execution hosts and set both `satellite_validate_certs` and `capsule_validate_certs` to `true`.
+
 ## Running All Playbooks
 
 If you want to run all playbooks in sequence, use the `run_all.yml` master playbook:
@@ -200,6 +266,7 @@ ansible-playbook -i inventory.yml run_all.yml --become-ask-pass
 - All playbooks use the `inventory.yml` file as the default inventory.
 - All playbooks use SSH to connect to the target host.
 - Playbook 01 requires root privileges (`become: true`).
+- Capsule Playbooks 11-13 and 16 require root privileges on Capsule hosts.
 - The optional Step 00 playbooks require root privileges on the Satellite server and enough free space for both ISO images.
 - Playbooks 02–06 connect to Satellite's API via HTTP and do not need root privileges.
 - The manifest import (Playbook 02) requires a valid Red Hat subscription manifest.

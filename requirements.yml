@@ -4,7 +4,7 @@
 collections:
   - name: ansible.posix
   - name: redhat.satellite_operations
-    version: ">=1.0.0"
+    version: ">=3.0.1,<4.0.0"
   - name: redhat.satellite
-    # content_import_version and content_import_info were added in 4.1.0.
-    version: ">=4.1.0"
+    # smart_proxy_refresh was added in 5.9.0.
+    version: ">=5.9.0,<6.0.0"

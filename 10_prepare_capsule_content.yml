@@ -1,0 +1,98 @@
+---
+# Prepare Satellite-hosted repositories used to install Capsule Server 6.19.
+
+- name: Prepare Capsule installation content
+  hosts: satellite_server
+  gather_facts: false
+  vars:
+    satellite_server_url: "https://{{ satellite_hostname }}"
+    satellite_admin_user: admin
+    satellite_admin_pass: "{{ satellite_admin_password }}"
+    organization: "{{ satellite_organization }}"
+  tasks:
+    - name: Validate Capsule content configuration
+      ansible.builtin.assert:
+        that:
+          - groups['capsule_servers'] | default([]) | length > 0
+          - capsule_repository_sets | length > 0
+          - capsule_content_repositories | length > 0
+          - capsule_content_overrides | length > 0
+        fail_msg: Configure at least one capsule_servers host and its content settings.
+
+    - name: Enable Capsule repository sets
+      redhat.satellite.repository_set:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        label: "{{ item.label }}"
+        repositories: "{{ item.repositories | default(omit) }}"
+        all_repositories: "{{ item.all_repositories | default(omit) }}"
+        state: enabled
+      loop: "{{ capsule_repository_sets }}"
+      loop_control:
+        label: "{{ item.label }}"
+
+    - name: Synchronize Capsule installation repositories
+      redhat.satellite.repository_sync:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        product: "{{ item.product }}"
+        repository: "{{ item.name }}"
+      loop: "{{ capsule_content_repositories }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Create Capsule installation Content View
+      redhat.satellite.content_view:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        name: "{{ capsule_content_view }}"
+        label: "{{ capsule_content_view_label }}"
+        repositories: "{{ capsule_content_repositories }}"
+        state: present
+
+    - name: Read Capsule installation Content View
+      redhat.satellite.content_view_info:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        name: "{{ capsule_content_view }}"
+      register: capsule_content_view_info
+
+    - name: Publish the initial or explicitly requested Content View version
+      redhat.satellite.content_view_version:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        content_view: "{{ capsule_content_view }}"
+        description: "Published for Capsule Server 6.19 installation"
+      when: >-
+        capsule_content_force_publish | bool or
+        (capsule_content_view_info.content_view.versions | default([]) | length == 0)
+
+    - name: Create Capsule installation activation key
+      redhat.satellite.activation_key:
+        username: "{{ satellite_admin_user }}"
+        password: "{{ satellite_admin_pass }}"
+        server_url: "{{ satellite_server_url }}"
+        validate_certs: "{{ satellite_validate_certs }}"
+        organization: "{{ organization }}"
+        name: "{{ capsule_activation_key }}"
+        description: "Registers RHEL hosts that will become Satellite Capsules"
+        lifecycle_environment: "{{ capsule_activation_key_lifecycle_environment }}"
+        content_view: "{{ capsule_content_view }}"
+        content_overrides: "{{ capsule_content_overrides }}"
+        unlimited_hosts: true
+        state: present
