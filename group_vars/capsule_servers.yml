@@ -2,10 +2,6 @@
 # Override these values in host_vars/<inventory-host>.yml when ansible_host is
 # not the Capsule's DNS FQDN or when a Capsule has site-specific assignments.
 capsule_fqdn: "{{ ansible_host | default(inventory_hostname) }}"
-capsule_location: >-
-  {{ hostvars[groups['satellite_servers'] | first].satellite_default_location }}
-capsule_organization: >-
-  {{ hostvars[groups['satellite_servers'] | first].satellite_organization }}
 capsule_satellite_fqdn: >-
   {{ hostvars[groups['satellite_servers'] | first].satellite_hostname }}
 capsule_satellite_url: "https://{{ capsule_satellite_fqdn }}"

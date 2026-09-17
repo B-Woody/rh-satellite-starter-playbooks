@@ -27,9 +27,13 @@
         name: "{{ hostvars[item].capsule_fqdn }}"
         url: "https://{{ hostvars[item].capsule_fqdn }}:9090"
         organizations:
-          - "{{ hostvars[item].capsule_organization }}"
+          - >-
+            {{ hostvars[item].capsule_organization |
+               default(satellite_organization, true) }}
         locations:
-          - "{{ hostvars[item].capsule_location }}"
+          - >-
+            {{ hostvars[item].capsule_location |
+               default(satellite_default_location, true) }}
         state: present
       loop: "{{ groups['capsule_servers'] }}"
       loop_control:
@@ -55,9 +59,13 @@
         name: "{{ hostvars[item].capsule_fqdn }}"
         url: "https://{{ hostvars[item].capsule_fqdn }}:9090"
         organizations:
-          - "{{ hostvars[item].capsule_organization }}"
+          - >-
+            {{ hostvars[item].capsule_organization |
+               default(satellite_organization, true) }}
         locations:
-          - "{{ hostvars[item].capsule_location }}"
+          - >-
+            {{ hostvars[item].capsule_location |
+               default(satellite_default_location, true) }}
         lifecycle_environments: "{{ hostvars[item].capsule_lifecycle_environments }}"
         download_policy: "{{ hostvars[item].capsule_download_policy }}"
         state: present

@@ -66,6 +66,7 @@
       loop: "{{ capsule_sync_requests.results | default([]) }}"
       loop_control:
         label: "{{ item.item.resources[0].name | default('Capsule') }}"
+      no_log: true
       when: capsule_content_sync | bool
 
     - name: Wait for Capsule content synchronization
@@ -79,4 +80,5 @@
       loop: "{{ capsule_sync_requests.results | default([]) }}"
       loop_control:
         label: "{{ item.item.resources[0].name | default('Capsule') }}"
+      no_log: true
       when: capsule_content_sync | bool

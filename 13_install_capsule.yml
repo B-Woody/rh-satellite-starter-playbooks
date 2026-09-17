@@ -60,6 +60,12 @@
         satellite_installer_options: "{{ capsule_install_options }}"
         satellite_installer_timeout: "{{ capsule_installer_timeout }}"
 
+    - name: Install the firewalld Python bindings
+      ansible.builtin.package:
+        name: python3-firewall
+        state: present
+      when: capsule_manage_firewall | bool
+
     - name: Allow Satellite Capsule traffic through firewalld
       ansible.posix.firewalld:
         service: "{{ capsule_firewall_service }}"

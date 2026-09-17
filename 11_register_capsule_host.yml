@@ -19,7 +19,7 @@
       failed_when: false
 
     - name: Read current subscription server configuration
-      ansible.builtin.command: subscription-manager config --list --section server
+      ansible.builtin.command: subscription-manager config --list
       register: capsule_subscription_config
       changed_when: false
       when: capsule_subscription_identity_before.rc == 0
@@ -30,12 +30,11 @@
           {{
             capsule_subscription_identity_before.rc == 0 and
             (
-              capsule_subscription_config.stdout | default('') |
-              regex_search(
-                '(?m)^\\s*hostname\\s*=\\s*\\[?' ~
-                (capsule_satellite_fqdn | regex_escape) ~ '\\]?\\s*$'
-              )
-            ) is not none
+              'hostname = ' ~ capsule_satellite_fqdn in
+              capsule_subscription_config.stdout_lines | map('trim') or
+              'hostname = [' ~ capsule_satellite_fqdn ~ ']' in
+              capsule_subscription_config.stdout_lines | map('trim')
+            )
           }}
 
     - name: Reject registration to another subscription server
@@ -56,8 +55,12 @@
         password: "{{ satellite_admin_pass }}"
         server_url: "{{ capsule_satellite_url }}"
         validate_certs: "{{ capsule_validate_certs }}"
-        organization: "{{ capsule_organization }}"
-        location: "{{ capsule_location }}"
+        organization: >-
+          {{ capsule_organization |
+             default(hostvars[satellite_inventory_host].satellite_organization, true) }}
+        location: >-
+          {{ capsule_location |
+             default(hostvars[satellite_inventory_host].satellite_default_location, true) }}
         activation_keys:
           - "{{ capsule_activation_key }}"
         force: "{{ capsule_registration_force }}"

@@ -59,4 +59,4 @@ capsule_validate_certs: false
 
 capsule_expected_features: >-
   {{ ['Pulpcore'] +
-     (['Remote Execution'] if capsule_enable_remote_execution | bool else []) }}
+     (['Script'] if capsule_enable_remote_execution | bool else []) }}

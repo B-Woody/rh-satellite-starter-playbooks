@@ -4,7 +4,6 @@
 - name: Verify Capsule services
   hosts: capsule_servers
   gather_facts: false
-  become: true
   tasks:
     - name: Verify foreman-proxy is active
       ansible.builtin.command: systemctl is-active foreman-proxy
